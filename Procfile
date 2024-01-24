@@ -1,1 +1,1 @@
-web: gunicorn justlife.wsgi
+worker: python justlife.py
