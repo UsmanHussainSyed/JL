@@ -1,7 +1,18 @@
-from bs4 import BeautifulSoup
 import requests
+from bs4 import BeautifulSoup
 import time
 import json
+import logging
+import signal  # Import the signal module
+
+# Configure logging
+logging.basicConfig(filename='justlife_script.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+def handle_interrupt(signum, frame):
+    print("Ctrl+C detected! Exiting gracefully...")
+    # Add any cleanup code here (close files, release resources, etc.)
+    exit(0)  # Exit with a success status
 
 def send_whatsapp_message(data_list):
     message = "JustLife\n"
@@ -18,26 +29,41 @@ def send_whatsapp_message(data_list):
         message += f"Payment Method: {entry['PaymentMethod']}\n"
         message += f"https://partner.justlife.com{entry['Link']}"
 
-    url = "https://api.green-api.com/waInstance7103851613/sendMessage/2fa5ad1223a5476e84eac4b6e5c81b9d75f2ba058f7e4ec29b"
+    url = "https://api.green-api.com/waInstance7103851613/sendMessage/43791796abb5486dbc2b6c48e67005012299e3c0032d49e88d"
     payload = {
         "chatId": "120363151154658973@g.us",
         "message": message
     }
     headers = {'Content-Type': 'application/json'}
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    print(response.text.encode('utf8'))
+
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        logging.info(f"WhatsApp message sent. Response: {response.text.encode('utf8')}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"An error occurred during web request: {e}")
+    except BeautifulSoup.FeatureNotFound as e:
+        logging.error(f"Error parsing HTML: {e}. Website structure might have changed.")
+    except KeyError as e:
+        logging.error(f"Error extracting data: {e}. Check your data mapping logic.")
+    except ValueError as e:
+        logging.error(f"Error processing extracted data: {e}. Check for incorrect data formats.")
+    except json.JSONDecodeError as e:
+        logging.error(f"Error handling WhatsApp API response: {e}")
+    except Exception as e:  # Catch-all for unexpected errors
+        logging.critical(f"Unexpected error occurred: {e}")
 
 def extract_data_from_table(soup):
     table = soup.select_one('.table.table-bordered.table-striped.table-hover.sonata-ba-list')
     if not table:
+        logging.warning("Booking table not found.")
         return None
 
     rows = table.select('tbody tr')
     if not rows:
+        logging.warning("No data rows found in the table.")
         return None
 
     extracted_data = []
-
     for row in rows:
         cells = row.select('td')
         if cells:
@@ -59,7 +85,7 @@ def extract_data_from_table(soup):
     return extracted_data
 
 def is_logged_in(soup):
-    return bool(soup.select_one('.login-box-msg') is None)
+    return bool(soup.select_one('.login-box-msg') is None) 
 
 session = None  # Start with no session
 no_data_counter = 0  # Initialize a counter for "No data found" cases
